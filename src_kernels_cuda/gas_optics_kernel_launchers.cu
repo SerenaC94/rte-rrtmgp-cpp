@@ -332,7 +332,28 @@ namespace rrtmgp_kernel_launcher_cuda
         dim3 grid_gpu_min_1(1, 42, 8);
         dim3 block_gpu_min_1(8,1,16);
 
+        /*
         gas_optical_depths_minor_kernel<8,1,16><<<grid_gpu_min_1, block_gpu_min_1>>>(
+                                        ncol, nlay, ngpt,
+                                        ngas, nflav, ntemp, neta,
+                                        nminorlower,
+                                        nminorklower,
+                                        idx_h2o, idx_tropo,
+                                        gpoint_flavor,
+                                        kminor_lower,
+                                        minor_limits_gpt_lower,
+                                        minor_scales_with_density_lower,
+                                        scale_by_complement_lower,
+                                        idx_minor_lower,
+                                        idx_minor_scaling_lower,
+                                        kminor_start_lower,
+                                        play, tlay, col_gas,
+                                        fminor, jeta, jtemp,
+                                        tropo, tau, nullptr);
+                                        */
+
+
+        gas_optical_depths_minor_kernel_serial(
                                         ncol, nlay, ngpt,
                                         ngas, nflav, ntemp, neta,
                                         nminorlower,
@@ -356,7 +377,29 @@ namespace rrtmgp_kernel_launcher_cuda
         dim3 grid_gpu_min_2(1, 42, 4);
         dim3 block_gpu_min_2(8,1,32);
 
+        /*
         gas_optical_depths_minor_kernel<8,1,32><<<grid_gpu_min_2, block_gpu_min_2>>>(
+                                    ncol, nlay, ngpt,
+                                    ngas, nflav, ntemp, neta,
+                                    nminorupper,
+                                    nminorkupper,
+                                    idx_h2o, idx_tropo,
+                                    gpoint_flavor,
+                                    kminor_upper,
+                                    minor_limits_gpt_upper,
+                                    minor_scales_with_density_upper,
+                                    scale_by_complement_upper,
+                                    idx_minor_upper,
+                                    idx_minor_scaling_upper,
+                                    kminor_start_upper,
+                                    play, tlay, col_gas,
+                                    fminor, jeta, jtemp,
+                                    tropo, tau, nullptr);
+                                    */
+
+
+        // chiamata seriale
+        gas_optical_depths_minor_kernel_serial(
                                     ncol, nlay, ngpt,
                                     ngas, nflav, ntemp, neta,
                                     nminorupper,

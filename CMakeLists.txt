@@ -89,6 +89,8 @@ if(NOT HASCACHE)
       "Flags used by the CXX-compiler during release builds." FORCE)
     # add openmp flags to nvcc
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler ${OpenMP_CXX_FLAGS}")
+    # add link flags to nvcc
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xlinker ${OpenMP_EXE_LINKER_FLAGS}")
   endif()
 
   message(STATUS "Build Type: " ${CMAKE_BUILD_TYPE})

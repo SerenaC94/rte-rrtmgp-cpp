@@ -724,7 +724,7 @@ void gas_optical_depths_minor_cpu(
     Float *__restrict__ tau,
     Float *__restrict__ tau_minor)
 {
-    #pragma omp parallel for
+    #pragma omp parallel for collapse(3)
     for (int block_x = 0; block_x < gridDimX; ++block_x)
     {
         for (int block_y = 0; block_y < gridDimY; ++block_y)

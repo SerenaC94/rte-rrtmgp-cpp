@@ -73,6 +73,13 @@ if(NOT HASCACHE)
   set(CMAKE_Fortran_FLAGS_RELEASE ${USER_FC_FLAGS_RELEASE} CACHE STRING
     "Flags used by the Fortran-compiler during release builds." FORCE)
 
+    find_package(OpenMP)
+    if (OPENMP_FOUND)
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+        set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+    endif()    
+
   if(USECUDA)
     set(CMAKE_CUDA_FLAGS ${USER_CUDA_FLAGS} CACHE STRING
       "Flags used by the CXX-compiler during all build types." FORCE)
@@ -80,6 +87,8 @@ if(NOT HASCACHE)
       "Flags used by the CXX-compiler during debug builds." FORCE)
     set(CMAKE_CUDA_FLAGS_RELEASE ${USER_CUDA_FLAGS_RELEASE} CACHE STRING
       "Flags used by the CXX-compiler during release builds." FORCE)
+    # add openmp flags to nvcc
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler ${OpenMP_CXX_FLAGS}")
   endif()
 
   message(STATUS "Build Type: " ${CMAKE_BUILD_TYPE})

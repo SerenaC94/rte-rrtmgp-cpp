@@ -1,4 +1,5 @@
 #include "Types.h"
+#include <omp.h>
 
 __device__
 Float interpolate1D(const Float val,
@@ -521,6 +522,228 @@ void compute_tau_minor_absorption_kernel(
 #endif
 */
 
+template <int block_size_x, int block_size_y, int block_size_z, int gridDimX, int gridDimY, int gridDimZ>
+void gas_optical_depths_minor_cpu_before_sync(
+    const int ncol, const int nlay, const int ngpt,
+    const int ngas, const int nflav, const int ntemp, const int neta,
+    const int nminor,
+    const int nminork,
+    const int idx_h2o, const int idx_tropo,
+    const int *__restrict__ gpoint_flavor,
+    const Float *__restrict__ kminor,
+    const int *__restrict__ minor_limits_gpt,
+    const Bool *__restrict__ minor_scales_with_density,
+    const Bool *__restrict__ scale_by_complement,
+    const int *__restrict__ idx_minor,
+    const int *__restrict__ idx_minor_scaling,
+    const int *__restrict__ kminor_start,
+    const Float *__restrict__ play,
+    const Float *__restrict__ tlay,
+    const Float *__restrict__ col_gas,
+    const Float *__restrict__ fminor,
+    const int *__restrict__ jeta,
+    const int *__restrict__ jtemp,
+    const Bool *__restrict__ tropo,
+    Float *__restrict__ tau,
+    Float *__restrict__ tau_minor,
+    const int imnr,
+    Float scalings [block_size_z][block_size_y],
+    const int block_x, const int block_y, const int block_z)
+{
+    for (int thread_x = 0; thread_x < block_size_x; ++thread_x)
+    {
+        for (int thread_y = 0; thread_y < block_size_y; ++thread_y)
+        {
+            for (int thread_z = 0; thread_z < block_size_z; ++thread_z)
+            {
+
+                const int ilay = block_y * block_size_y + thread_y;
+                const int icol = block_z * block_size_z + thread_z;
+                if ((icol < ncol) && (ilay < nlay))
+                {
+                    const int idx_collay = icol + ilay * ncol;
+
+                    if (tropo[idx_collay] == idx_tropo)
+                    {
+
+                        Float scaling = Float(0.);
+
+                        if (thread_x == 0)
+                        {
+                            const int ncl = ncol * nlay;
+                            scaling = col_gas[idx_collay + idx_minor[imnr] * ncl];
+
+                            if (minor_scales_with_density[imnr])
+                            {
+                                const Float PaTohPa = 0.01;
+                                scaling *= PaTohPa * play[idx_collay] / tlay[idx_collay];
+
+                                if (idx_minor_scaling[imnr] > 0)
+                                {
+                                    const int idx_collaywv = icol + ilay * ncol + idx_h2o * ncl;
+                                    Float vmr_fact = Float(1.) / col_gas[idx_collay];
+                                    Float dry_fact = Float(1.) / (Float(1.) + col_gas[idx_collaywv] * vmr_fact);
+
+                                    if (scale_by_complement[imnr])
+                                        scaling *= (Float(1.) - col_gas[idx_collay + idx_minor_scaling[imnr] * ncl] * vmr_fact * dry_fact);
+                                    else
+                                        scaling *= col_gas[idx_collay + idx_minor_scaling[imnr] * ncl] * vmr_fact * dry_fact;
+                                }
+                            }
+
+                            scalings[thread_z][thread_y] = scaling;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+template <int block_size_x, int block_size_y, int block_size_z, int gridDimX, int gridDimY, int gridDimZ>
+void gas_optical_depths_minor_cpu_after_sync(
+    const int ncol, const int nlay, const int ngpt,
+    const int ngas, const int nflav, const int ntemp, const int neta,
+    const int nminor,
+    const int nminork,
+    const int idx_h2o, const int idx_tropo,
+    const int *__restrict__ gpoint_flavor,
+    const Float *__restrict__ kminor,
+    const int *__restrict__ minor_limits_gpt,
+    const Bool *__restrict__ minor_scales_with_density,
+    const Bool *__restrict__ scale_by_complement,
+    const int *__restrict__ idx_minor,
+    const int *__restrict__ idx_minor_scaling,
+    const int *__restrict__ kminor_start,
+    const Float *__restrict__ play,
+    const Float *__restrict__ tlay,
+    const Float *__restrict__ col_gas,
+    const Float *__restrict__ fminor,
+    const int *__restrict__ jeta,
+    const int *__restrict__ jtemp,
+    const Bool *__restrict__ tropo,
+    Float *__restrict__ tau,
+    Float *__restrict__ tau_minor,
+    const int imnr,
+    Float scalings [block_size_z][block_size_y],
+    const int block_x, const int block_y, const int block_z)
+{
+    for (int thread_x = 0; thread_x < block_size_x; ++thread_x)
+    {
+        for (int thread_y = 0; thread_y < block_size_y; ++thread_y)
+        {
+            for (int thread_z = 0; thread_z < block_size_z; ++thread_z)
+            {
+                // Fetch the three coordinates.
+                const int ilay = block_y * block_size_y + thread_y;
+                const int icol = block_z * block_size_z + thread_z;
+
+                if ((icol < ncol) && (ilay < nlay))
+                {
+                    const int idx_collay = icol + ilay * ncol;
+
+                    if (tropo[idx_collay] == idx_tropo)
+                    {
+
+                        Float scaling = scalings[thread_z][thread_y];
+
+                        const int gpt_start = minor_limits_gpt[2 * imnr] - 1;
+                        const int gpt_end = minor_limits_gpt[2 * imnr + 1];
+                        const int gpt_offs = 1 - idx_tropo;
+                        const int iflav = gpoint_flavor[2 * gpt_start + gpt_offs] - 1;
+
+                        const int idx_fcl2 = 2 * 2 * (icol + ilay * ncol + iflav * ncol * nlay);
+                        const int idx_fcl1 = 2 * (icol + ilay * ncol + iflav * ncol * nlay);
+
+                        const Float *kfminor = &fminor[idx_fcl2];
+                        const Float *kin = &kminor[0];
+
+                        const int j0 = jeta[idx_fcl1];
+                        const int j1 = jeta[idx_fcl1 + 1];
+                        const int kjtemp = jtemp[idx_collay];
+                        const int band_gpt = gpt_end - gpt_start;
+                        const int gpt_offset = kminor_start[imnr] - 1;
+
+                        if constexpr (block_size_x == 16)
+                        {
+                            if (thread_x < band_gpt)
+                            {
+                                const int igpt = thread_x;
+
+                                Float ltau_minor = kfminor[0] * kin[(kjtemp - 1) + (j0 - 1) * ntemp + (igpt + gpt_offset) * ntemp * neta] +
+                                                    kfminor[1] * kin[(kjtemp - 1) + j0 * ntemp + (igpt + gpt_offset) * ntemp * neta] +
+                                                    kfminor[2] * kin[kjtemp + (j1 - 1) * ntemp + (igpt + gpt_offset) * ntemp * neta] +
+                                                    kfminor[3] * kin[kjtemp + j1 * ntemp + (igpt + gpt_offset) * ntemp * neta];
+
+                                const int idx_out = icol + ilay * ncol + (igpt + gpt_start) * ncol * nlay;
+                                tau[idx_out] += ltau_minor * scaling;
+                            }
+                        }
+                        else
+                        {
+                            for (int igpt = thread_x; igpt < band_gpt; igpt += block_size_x)
+                            {
+                                Float ltau_minor = kfminor[0] * kin[(kjtemp - 1) + (j0 - 1) * ntemp + (igpt + gpt_offset) * ntemp * neta] +
+                                                    kfminor[1] * kin[(kjtemp - 1) + j0 * ntemp + (igpt + gpt_offset) * ntemp * neta] +
+                                                    kfminor[2] * kin[kjtemp + (j1 - 1) * ntemp + (igpt + gpt_offset) * ntemp * neta] +
+                                                    kfminor[3] * kin[kjtemp + j1 * ntemp + (igpt + gpt_offset) * ntemp * neta];
+
+                                const int idx_out = icol + ilay * ncol + (igpt + gpt_start) * ncol * nlay;
+                                tau[idx_out] += ltau_minor * scaling;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+template <int block_size_x, int block_size_y, int block_size_z, int gridDimX, int gridDimY, int gridDimZ>
+void gas_optical_depths_minor_cpu(
+    const int ncol, const int nlay, const int ngpt,
+    const int ngas, const int nflav, const int ntemp, const int neta,
+    const int nminor,
+    const int nminork,
+    const int idx_h2o, const int idx_tropo,
+    const int *__restrict__ gpoint_flavor,
+    const Float *__restrict__ kminor,
+    const int *__restrict__ minor_limits_gpt,
+    const Bool *__restrict__ minor_scales_with_density,
+    const Bool *__restrict__ scale_by_complement,
+    const int *__restrict__ idx_minor,
+    const int *__restrict__ idx_minor_scaling,
+    const int *__restrict__ kminor_start,
+    const Float *__restrict__ play,
+    const Float *__restrict__ tlay,
+    const Float *__restrict__ col_gas,
+    const Float *__restrict__ fminor,
+    const int *__restrict__ jeta,
+    const int *__restrict__ jtemp,
+    const Bool *__restrict__ tropo,
+    Float *__restrict__ tau,
+    Float *__restrict__ tau_minor)
+{
+    #pragma omp parallel for
+    for (int block_x = 0; block_x < gridDimX; ++block_x)
+    {
+        for (int block_y = 0; block_y < gridDimY; ++block_y)
+        {
+            for (int block_z = 0; block_z < gridDimZ; ++block_z)
+            {
+                // print number of threads
+                // printf("Number of threads: %d\n", omp_get_num_threads());
+                Float scalings[block_size_z][block_size_y];
+                for (int imnr = 0; imnr < nminor; ++imnr)
+                {
+                    gas_optical_depths_minor_cpu_before_sync<block_size_x, block_size_y, block_size_z, gridDimX, gridDimY, gridDimZ>(ncol, nlay, ngpt, ngas, nflav, ntemp, neta, nminor, nminork, idx_h2o, idx_tropo, gpoint_flavor, kminor, minor_limits_gpt, minor_scales_with_density, scale_by_complement, idx_minor, idx_minor_scaling, kminor_start, play, tlay, col_gas, fminor, jeta, jtemp, tropo, tau, tau_minor, imnr, scalings, block_x, block_y, block_z);
+                    gas_optical_depths_minor_cpu_after_sync <block_size_x, block_size_y, block_size_z, gridDimX, gridDimY, gridDimZ>(ncol, nlay, ngpt, ngas, nflav, ntemp, neta, nminor, nminork, idx_h2o, idx_tropo, gpoint_flavor, kminor, minor_limits_gpt, minor_scales_with_density, scale_by_complement, idx_minor, idx_minor_scaling, kminor_start, play, tlay, col_gas, fminor, jeta, jtemp, tropo, tau, tau_minor, imnr, scalings, block_x, block_y, block_z);
+                }
+            }
+        }
+    }
+}
+/*
 #if use_shared_tau == 0
 template<int block_size_x, int block_size_y, int block_size_z> __global__
 void gas_optical_depths_minor_kernel(
@@ -640,7 +863,7 @@ void gas_optical_depths_minor_kernel(
         }
     }
 }
-#endif
+#endif*/
 
 
 /*

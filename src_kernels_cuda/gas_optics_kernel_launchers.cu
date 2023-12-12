@@ -240,15 +240,14 @@ namespace rrtmgp_kernel_launcher_cuda
     };
 
 
-    struct Gas_optical_depths_minor_kernel
-    {
-        template<unsigned int I, unsigned int J, unsigned int K, class... Args>
-        static void launch(dim3 grid, dim3 block, Args... args)
-        {
-            gas_optical_depths_minor_kernel<I, J, K><<<grid, block>>>(args...);
-        }
-    };
-
+    // struct Gas_optical_depths_minor_kernel
+    // {
+    //     template<unsigned int I, unsigned int J, unsigned int K, class... Args>
+    //     static void launch(dim3 grid, dim3 block, Args... args)
+    //     {
+    //         gas_optical_depths_minor_kernel<I, J, K><<<grid, block>>>(args...);
+    //     }
+    // };
 
     void compute_tau_absorption(
             const int ncol, const int nlay, const int nband, const int ngpt,
@@ -329,10 +328,14 @@ namespace rrtmgp_kernel_launcher_cuda
         // Lower
         int idx_tropo = 1;
 
-        dim3 grid_gpu_min_1(1, 42, 8);
-        dim3 block_gpu_min_1(8,1,16);
+        cudaDeviceSynchronize();
 
-        gas_optical_depths_minor_kernel<8,1,16><<<grid_gpu_min_1, block_gpu_min_1>>>(
+
+        // dim3 grid_gpu_min_1(1, 42, 8);
+        // dim3 block_gpu_min_1(8,1,16);
+
+        gas_optical_depths_minor_cpu<8,1,16, 1,42,8>
+        (
                                         ncol, nlay, ngpt,
                                         ngas, nflav, ntemp, neta,
                                         nminorlower,
@@ -353,10 +356,12 @@ namespace rrtmgp_kernel_launcher_cuda
         // Upper
         idx_tropo = 0;
 
-        dim3 grid_gpu_min_2(1, 42, 4);
-        dim3 block_gpu_min_2(8,1,32);
+        // dim3 grid_gpu_min_2(1, 42, 4);
+        // dim3 block_gpu_min_2(8,1,32);
 
-        gas_optical_depths_minor_kernel<8,1,32><<<grid_gpu_min_2, block_gpu_min_2>>>(
+        // gas_optical_depths_minor_kernel<8,1,32><<<grid_gpu_min_2, block_gpu_min_2>>>(
+        gas_optical_depths_minor_cpu<8,1,32, 1,42,4>
+        (
                                     ncol, nlay, ngpt,
                                     ngas, nflav, ntemp, neta,
                                     nminorupper,

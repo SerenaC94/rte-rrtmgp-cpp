@@ -664,34 +664,15 @@ void gas_optical_depths_minor_cpu_after_sync(
                         const int kjtemp = jtemp[idx_collay];
                         const int band_gpt = gpt_end - gpt_start;
                         const int gpt_offset = kminor_start[imnr] - 1;
-
-                        if constexpr (block_size_x == 16)
+                        for (int igpt = thread_x; igpt < band_gpt; igpt += block_size_x)
                         {
-                            if (thread_x < band_gpt)
-                            {
-                                const int igpt = thread_x;
+                            Float ltau_minor = kfminor[0] * kin[(kjtemp - 1) + (j0 - 1) * ntemp + (igpt + gpt_offset) * ntemp * neta] +
+                                                kfminor[1] * kin[(kjtemp - 1) + j0 * ntemp + (igpt + gpt_offset) * ntemp * neta] +
+                                                kfminor[2] * kin[kjtemp + (j1 - 1) * ntemp + (igpt + gpt_offset) * ntemp * neta] +
+                                                kfminor[3] * kin[kjtemp + j1 * ntemp + (igpt + gpt_offset) * ntemp * neta];
 
-                                Float ltau_minor = kfminor[0] * kin[(kjtemp - 1) + (j0 - 1) * ntemp + (igpt + gpt_offset) * ntemp * neta] +
-                                                    kfminor[1] * kin[(kjtemp - 1) + j0 * ntemp + (igpt + gpt_offset) * ntemp * neta] +
-                                                    kfminor[2] * kin[kjtemp + (j1 - 1) * ntemp + (igpt + gpt_offset) * ntemp * neta] +
-                                                    kfminor[3] * kin[kjtemp + j1 * ntemp + (igpt + gpt_offset) * ntemp * neta];
-
-                                const int idx_out = icol + ilay * ncol + (igpt + gpt_start) * ncol * nlay;
-                                tau[idx_out] += ltau_minor * scaling;
-                            }
-                        }
-                        else
-                        {
-                            for (int igpt = thread_x; igpt < band_gpt; igpt += block_size_x)
-                            {
-                                Float ltau_minor = kfminor[0] * kin[(kjtemp - 1) + (j0 - 1) * ntemp + (igpt + gpt_offset) * ntemp * neta] +
-                                                    kfminor[1] * kin[(kjtemp - 1) + j0 * ntemp + (igpt + gpt_offset) * ntemp * neta] +
-                                                    kfminor[2] * kin[kjtemp + (j1 - 1) * ntemp + (igpt + gpt_offset) * ntemp * neta] +
-                                                    kfminor[3] * kin[kjtemp + j1 * ntemp + (igpt + gpt_offset) * ntemp * neta];
-
-                                const int idx_out = icol + ilay * ncol + (igpt + gpt_start) * ncol * nlay;
-                                tau[idx_out] += ltau_minor * scaling;
-                            }
+                            const int idx_out = icol + ilay * ncol + (igpt + gpt_start) * ncol * nlay;
+                            tau[idx_out] += ltau_minor * scaling;
                         }
                     }
                 }
@@ -726,22 +707,15 @@ void gas_optical_depths_minor_cpu(
 {
     #pragma omp parallel for collapse(3)
     for (int block_x = 0; block_x < gridDimX; ++block_x)
-    {
         for (int block_y = 0; block_y < gridDimY; ++block_y)
-        {
-            for (int block_z = 0; block_z < gridDimZ; ++block_z)
-            {
-                // print number of threads
-                // printf("Number of threads: %d\n", omp_get_num_threads());
+            for (int block_z = 0; block_z < gridDimZ; ++block_z){
                 Float scalings[block_size_z][block_size_y];
                 for (int imnr = 0; imnr < nminor; ++imnr)
                 {
                     gas_optical_depths_minor_cpu_before_sync<block_size_x, block_size_y, block_size_z, gridDimX, gridDimY, gridDimZ>(ncol, nlay, ngpt, ngas, nflav, ntemp, neta, nminor, nminork, idx_h2o, idx_tropo, gpoint_flavor, kminor, minor_limits_gpt, minor_scales_with_density, scale_by_complement, idx_minor, idx_minor_scaling, kminor_start, play, tlay, col_gas, fminor, jeta, jtemp, tropo, tau, tau_minor, imnr, scalings, block_x, block_y, block_z);
                     gas_optical_depths_minor_cpu_after_sync <block_size_x, block_size_y, block_size_z, gridDimX, gridDimY, gridDimZ>(ncol, nlay, ngpt, ngas, nflav, ntemp, neta, nminor, nminork, idx_h2o, idx_tropo, gpoint_flavor, kminor, minor_limits_gpt, minor_scales_with_density, scale_by_complement, idx_minor, idx_minor_scaling, kminor_start, play, tlay, col_gas, fminor, jeta, jtemp, tropo, tau, tau_minor, imnr, scalings, block_x, block_y, block_z);
                 }
-            }
         }
-    }
 }
 /*
 #if use_shared_tau == 0

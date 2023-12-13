@@ -358,6 +358,13 @@ class Array_gpu
         }
         #endif
 
+        //new method: used to copy data from a gpu array to another one
+        #ifdef __CUDACC__
+        void copy_from_other_array(const Array_gpu<T, N>& array) {
+            cuda_safe_call(cudaMemcpy(this->ptr(), array.ptr(), this->ncells*sizeof(T), cudaMemcpyDeviceToDevice));
+        }
+        #endif
+
         #ifdef __CUDACC__
         Array_gpu& operator=(const Array_gpu<T, N>& array)
         {

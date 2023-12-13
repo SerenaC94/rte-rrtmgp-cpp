@@ -310,7 +310,7 @@ void gas_optical_depths_major_kernel(
         const Float* __restrict__ col_mix, const Float* __restrict__ fmajor,
         const int* __restrict__ jeta, const Bool* __restrict__ tropo,
         const int* __restrict__ jtemp, const int* __restrict__ jpress,
-        Float* __restrict__ tau)
+        Float* __restrict__ tau) //only array that is edited
 {
     const int igpt = blockIdx.x * blockDim.x + threadIdx.x;
     const int ilay = blockIdx.y * blockDim.y + threadIdx.y;
@@ -521,6 +521,7 @@ void compute_tau_minor_absorption_kernel(
 #endif
 */
 
+//KERNEL TO MODIFY
 #if use_shared_tau == 0
 template<int block_size_x, int block_size_y, int block_size_z> __global__
 void gas_optical_depths_minor_kernel(
@@ -544,25 +545,26 @@ void gas_optical_depths_minor_kernel(
         const int* __restrict__ jeta,
         const int* __restrict__ jtemp,
         const Bool* __restrict__ tropo,
-        Float* __restrict__ tau,
+        Float* __restrict__ tau, //the only output
         Float* __restrict__ tau_minor)
 {
-    const int ilay = blockIdx.y * block_size_y + threadIdx.y;
-    const int icol = blockIdx.z * block_size_z + threadIdx.z;
+    const int ilay = blockIdx.y * block_size_y + threadIdx.y; //index on the y axis
+    const int icol = blockIdx.z * block_size_z + threadIdx.z; //index on the z axis
 
     __shared__ Float scalings[block_size_z][block_size_y];
 
-    if ( (icol < ncol) && (ilay < nlay) )
+    if ( (icol < ncol) && (ilay < nlay) ) //parallel over x,y,z indexes
     {
         const int idx_collay = icol + ilay*ncol;
 
-        if (tropo[idx_collay] == idx_tropo)
+        if (tropo[idx_collay] == idx_tropo) //applied to whole rest of code
         {
-            for (int imnr=0; imnr<nminor; ++imnr)
+            for (int imnr=0; imnr<nminor; ++imnr) //main for loop, parallel over x,y,z indexes
             {
+                //shared memory initialization
                 Float scaling = Float(0.);
 
-                if (threadIdx.x == 0)
+                if (threadIdx.x == 0) //parallel over y,z indexes
                 {
                     const int ncl = ncol * nlay;
                     scaling = col_gas[idx_collay + idx_minor[imnr] * ncl];
@@ -585,10 +587,13 @@ void gas_optical_depths_minor_kernel(
                         }
                     }
 
-                    scalings[threadIdx.z][threadIdx.y] = scaling;
+                    scalings[threadIdx.z][threadIdx.y] = scaling; //set a value in the shared array
+                    //since this is called for each thread with x index equal to 0, the entire scalings array is set in this loop
                 }
                 __syncthreads();
 
+
+                //actual computation
                 scaling = scalings[threadIdx.z][threadIdx.y];
 
                 const int gpt_start = minor_limits_gpt[2*imnr]-1;
@@ -608,6 +613,8 @@ void gas_optical_depths_minor_kernel(
                 const int band_gpt = gpt_end-gpt_start;
                 const int gpt_offset = kminor_start[imnr]-1;
 
+                //a distinction made for efficiency, not correctness, in the case where band_gpt <= 16
+                //in all tests, band_gpt = 16
                 if constexpr (block_size_x == 16)
                 {
                     if (threadIdx.x < band_gpt)
@@ -620,7 +627,7 @@ void gas_optical_depths_minor_kernel(
                                         kfminor[3] * kin[kjtemp     +  j1   *ntemp + (igpt+gpt_offset)*ntemp*neta];
 
                         const int idx_out = icol + ilay*ncol + (igpt+gpt_start)*ncol*nlay;
-                        tau[idx_out] += ltau_minor * scaling;
+                        tau[idx_out] += ltau_minor * scaling; //set the output
                     }
                 }
                 else
@@ -633,7 +640,7 @@ void gas_optical_depths_minor_kernel(
                                         kfminor[3] * kin[kjtemp     +  j1   *ntemp + (igpt+gpt_offset)*ntemp*neta];
 
                         const int idx_out = icol + ilay*ncol + (igpt+gpt_start)*ncol*nlay;
-                        tau[idx_out] += ltau_minor * scaling;
+                        tau[idx_out] += ltau_minor * scaling; //set the output
                     }
                 }
             }

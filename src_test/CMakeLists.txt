@@ -26,3 +26,7 @@ endif()
 
 add_executable(test_rte_rrtmgp Radiation_solver.cpp test_rte_rrtmgp.cpp)
 target_link_libraries(test_rte_rrtmgp rte_rrtmgp ${LIBS} m)
+
+# link with OpenMP
+find_package(OpenMP)
+target_link_libraries(test_rte_rrtmgp_gpu OpenMP::OpenMP_CXX)

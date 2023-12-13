@@ -1,0 +1,6 @@
+.vscode
+build/
+allsky/*.nc
+allsky/*.txt
+allsky/ref
+allsky/test_rte_rrtmgp_gpu

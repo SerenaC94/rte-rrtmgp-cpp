@@ -12,8 +12,12 @@
 namespace
 {
     #include "gas_optics_kernels.cu"
+    #include "gas_optical_depths_minor_cpu.cpp"
 }
 
+#include <cassert>
+#include <algorithm>
+#include <chrono>
 
 namespace rrtmgp_kernel_launcher_cuda
 {
@@ -240,6 +244,9 @@ namespace rrtmgp_kernel_launcher_cuda
     };
 
 
+    //the kernel is called here, but vscode finds no references
+    //commenting out to be sure
+    /*
     struct Gas_optical_depths_minor_kernel
     {
         template<unsigned int I, unsigned int J, unsigned int K, class... Args>
@@ -248,6 +255,7 @@ namespace rrtmgp_kernel_launcher_cuda
             gas_optical_depths_minor_kernel<I, J, K><<<grid, block>>>(args...);
         }
     };
+    */
 
 
     void compute_tau_absorption(
@@ -256,30 +264,35 @@ namespace rrtmgp_kernel_launcher_cuda
             const int nminorlower, const int nminorklower,
             const int nminorupper, const int nminorkupper,
             const int idx_h2o,
-            const int* gpoint_flavor,
-            const int* band_lims_gpt,
-            const Float* kmajor,
-            const Float* kminor_lower,
-            const Float* kminor_upper,
-            const int* minor_limits_gpt_lower,
-            const int* minor_limits_gpt_upper,
-            const Bool* minor_scales_with_density_lower,
-            const Bool* minor_scales_with_density_upper,
-            const Bool* scale_by_complement_lower,
-            const Bool* scale_by_complement_upper,
-            const int* idx_minor_lower,
-            const int* idx_minor_upper,
-            const int* idx_minor_scaling_lower,
-            const int* idx_minor_scaling_upper,
-            const int* kminor_start_lower,
-            const int* kminor_start_upper,
-            const Bool* tropo,
-            const Float* col_mix, const Float* fmajor,
-            const Float* fminor, const Float* play,
-            const Float* tlay, const Float* col_gas,
-            const int* jeta, const int* jtemp,
-            const int* jpress,
-            Float* tau)
+            const int* gpoint_flavor, const int* gpoint_flavor_cpu,
+            const int* band_lims_gpt, const int* band_lims_gpt_cpu,
+            const Float* kmajor, const Float* kmajor_cpu,
+            const Float* kminor_lower, const Float* kminor_lower_cpu,
+            const Float* kminor_upper, const Float* kminor_upper_cpu,
+            const int* minor_limits_gpt_lower, const int* minor_limits_gpt_lower_cpu,
+            const int* minor_limits_gpt_upper, const int* minor_limits_gpt_upper_cpu,
+            const Bool* minor_scales_with_density_lower, const Bool* minor_scales_with_density_lower_cpu,
+            const Bool* minor_scales_with_density_upper, const Bool* minor_scales_with_density_upper_cpu,
+            const Bool* scale_by_complement_lower, const Bool* scale_by_complement_lower_cpu,
+            const Bool* scale_by_complement_upper, const Bool* scale_by_complement_upper_cpu,
+            const int* idx_minor_lower, const int* idx_minor_lower_cpu,
+            const int* idx_minor_upper, const int* idx_minor_upper_cpu,
+            const int* idx_minor_scaling_lower, const int* idx_minor_scaling_lower_cpu,
+            const int* idx_minor_scaling_upper, const int* idx_minor_scaling_upper_cpu,
+            const int* kminor_start_lower, const int* kminor_start_lower_cpu,
+            const int* kminor_start_upper, const int* kminor_start_upper_cpu,
+            const Bool* tropo, const Bool* tropo_cpu,
+            const Float* col_mix, const Float* col_mix_cpu,
+            const Float* fmajor, const Float* fmajor_cpu,
+            const Float* fminor, const Float* fminor_cpu,
+            const Float* play, const Float* play_cpu,
+            const Float* tlay, const Float* tlay_cpu,
+            const Float* col_gas, const Float* col_gas_cpu,
+            const int* jeta, const int* jeta_cpu,
+            const int* jtemp, const int* jtemp_cpu,
+            const int* jpress, const int* jpress_cpu,
+            Float* tau, Array_gpu<Float,3> &tau_array,
+            int execution_mode)
     {
         Tuner_map& tunings = Tuner::get_map();
 
@@ -314,6 +327,7 @@ namespace rrtmgp_kernel_launcher_cuda
             block_gpu_maj = tunings["gas_optical_depths_major_kernel"].second;
         }
 
+        //only tau changes
         run_kernel_compile_time<Gas_optical_depths_major_kernel>(
                 std::integer_sequence<unsigned int, 1, 2, 4, 8, 16, 24, 32, 48, 64>{},
                 std::integer_sequence<unsigned int, 1, 2, 4>{},
@@ -326,54 +340,195 @@ namespace rrtmgp_kernel_launcher_cuda
                 tropo, jtemp, jpress,
                 tau);
 
-        // Lower
-        int idx_tropo = 1;
 
-        dim3 grid_gpu_min_1(1, 42, 8);
-        dim3 block_gpu_min_1(8,1,16);
 
-        gas_optical_depths_minor_kernel<8,1,16><<<grid_gpu_min_1, block_gpu_min_1>>>(
-                                        ncol, nlay, ngpt,
-                                        ngas, nflav, ntemp, neta,
-                                        nminorlower,
-                                        nminorklower,
-                                        idx_h2o, idx_tropo,
-                                        gpoint_flavor,
-                                        kminor_lower,
-                                        minor_limits_gpt_lower,
-                                        minor_scales_with_density_lower,
-                                        scale_by_complement_lower,
-                                        idx_minor_lower,
-                                        idx_minor_scaling_lower,
-                                        kminor_start_lower,
-                                        play, tlay, col_gas,
-                                        fminor, jeta, jtemp,
-                                        tropo, tau, nullptr);
+        if (execution_mode == 0) {
+            // Lower
+            cudaEvent_t start1, stop1;
+            cudaEventCreate(&start1);
+            cudaEventCreate(&stop1);
 
-        // Upper
-        idx_tropo = 0;
+            int idx_tropo = 1;
 
-        dim3 grid_gpu_min_2(1, 42, 4);
-        dim3 block_gpu_min_2(8,1,32);
+            dim3 grid_gpu_min_1(1, 42, 8);
+            dim3 block_gpu_min_1(8,1,16);
 
-        gas_optical_depths_minor_kernel<8,1,32><<<grid_gpu_min_2, block_gpu_min_2>>>(
-                                    ncol, nlay, ngpt,
-                                    ngas, nflav, ntemp, neta,
-                                    nminorupper,
-                                    nminorkupper,
-                                    idx_h2o, idx_tropo,
-                                    gpoint_flavor,
-                                    kminor_upper,
-                                    minor_limits_gpt_upper,
-                                    minor_scales_with_density_upper,
-                                    scale_by_complement_upper,
-                                    idx_minor_upper,
-                                    idx_minor_scaling_upper,
-                                    kminor_start_upper,
-                                    play, tlay, col_gas,
-                                    fminor, jeta, jtemp,
-                                    tropo, tau, nullptr);
+            std::cout << "Running GPU code: lower call" << std::endl;
+            cudaEventRecord(start1);
+            gas_optical_depths_minor_kernel<8,1,16><<<grid_gpu_min_1, block_gpu_min_1>>>(
+                                            ncol, nlay, ngpt,
+                                            ngas, nflav, ntemp, neta,
+                                            nminorlower,
+                                            nminorklower,
+                                            idx_h2o, idx_tropo,
+                                            gpoint_flavor,
+                                            kminor_lower,
+                                            minor_limits_gpt_lower,
+                                            minor_scales_with_density_lower,
+                                            scale_by_complement_lower,
+                                            idx_minor_lower,
+                                            idx_minor_scaling_lower,
+                                            kminor_start_lower,
+                                            play, tlay, col_gas,
+                                            fminor, jeta, jtemp,
+                                            tropo, tau, nullptr);
+            cudaEventRecord(stop1);
+            cudaEventSynchronize(stop1);
+            float milliseconds = 0;
+            cudaEventElapsedTime(&milliseconds, start1, stop1);
+            std::cout << "Time elapsed: " << milliseconds << "ms" << std::endl;
 
+            // Upper
+            cudaEvent_t start2, stop2;
+            cudaEventCreate(&start2);
+            cudaEventCreate(&stop2);
+
+            idx_tropo = 0;
+
+            dim3 grid_gpu_min_2(1, 42, 4);
+            dim3 block_gpu_min_2(8,1,32);
+
+            std::cout << "Running GPU code: upper call" << std::endl;
+            cudaEventRecord(start2);
+            gas_optical_depths_minor_kernel<8,1,32><<<grid_gpu_min_2, block_gpu_min_2>>>(
+                                            ncol, nlay, ngpt,
+                                            ngas, nflav, ntemp, neta,
+                                            nminorupper,
+                                            nminorkupper,
+                                            idx_h2o, idx_tropo,
+                                            gpoint_flavor,
+                                            kminor_upper,
+                                            minor_limits_gpt_upper,
+                                            minor_scales_with_density_upper,
+                                            scale_by_complement_upper,
+                                            idx_minor_upper,
+                                            idx_minor_scaling_upper,
+                                            kminor_start_upper,
+                                            play, tlay, col_gas,
+                                            fminor, jeta, jtemp,
+                                            tropo, tau, nullptr);
+            cudaEventRecord(stop2);
+            cudaEventSynchronize(stop2);
+            cudaEventElapsedTime(&milliseconds, start2, stop2);
+            std::cout << "Time elapsed: " << milliseconds << "ms" << std::endl;
+        } else {
+            //transfer data from GPU to CPU
+            Array<Float,3> tau_cpu_array(tau_array);
+            Float* tau_cpu = tau_cpu_array.ptr();
+
+            // Lower
+            int idx_tropo = 1;
+            
+            if(execution_mode == 1) {
+                std::cout << "Running serial CPU code: lower call" << std::endl;
+                auto t0 = std::chrono::high_resolution_clock::now();
+                gas_optical_depths_minor_cpu_serial(
+                                                ncol, nlay, ngpt,
+                                                ngas, nflav, ntemp, neta,
+                                                nminorlower,
+                                                nminorklower,
+                                                idx_h2o, idx_tropo,
+                                                gpoint_flavor_cpu,
+                                                kminor_lower_cpu,
+                                                minor_limits_gpt_lower_cpu,
+                                                minor_scales_with_density_lower_cpu,
+                                                scale_by_complement_lower_cpu,
+                                                idx_minor_lower_cpu,
+                                                idx_minor_scaling_lower_cpu,
+                                                kminor_start_lower_cpu,
+                                                play_cpu, tlay_cpu, col_gas_cpu,
+                                                fminor_cpu, jeta_cpu, jtemp_cpu,
+                                                tropo_cpu, tau_cpu, nullptr);
+                auto t1 = std::chrono::high_resolution_clock::now();
+                auto dt = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+                double milliseconds = static_cast<double>(dt)/1000;
+                std::cout << "Time elapsed: " << milliseconds << "ms" << std::endl;
+            } else {
+                std::cout << "Running parallel CPU code: lower call" << std::endl;
+                auto t0 = std::chrono::high_resolution_clock::now();
+                gas_optical_depths_minor_cpu_parallel(
+                                                ncol, nlay,
+                                                ntemp, neta,
+                                                nminorlower,
+                                                idx_h2o, idx_tropo,
+                                                gpoint_flavor_cpu,
+                                                kminor_lower_cpu,
+                                                minor_limits_gpt_lower_cpu,
+                                                minor_scales_with_density_lower_cpu,
+                                                scale_by_complement_lower_cpu,
+                                                idx_minor_lower_cpu,
+                                                idx_minor_scaling_lower_cpu,
+                                                kminor_start_lower_cpu,
+                                                play_cpu, tlay_cpu, col_gas_cpu,
+                                                fminor_cpu, jeta_cpu, jtemp_cpu,
+                                                tropo_cpu, tau_cpu);
+                auto t1 = std::chrono::high_resolution_clock::now();
+                auto dt = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+                double milliseconds = static_cast<double>(dt)/1000;
+                std::cout << "Time elapsed: " << milliseconds << "ms" << std::endl;
+            }
+
+            // Upper
+            idx_tropo = 0;
+
+            if(execution_mode == 1) {
+                std::cout << "Running serial CPU code: upper call" << std::endl;
+                auto t0 = std::chrono::high_resolution_clock::now();
+                gas_optical_depths_minor_cpu_serial(
+                                                ncol, nlay, ngpt,
+                                                ngas, nflav, ntemp, neta,
+                                                nminorupper,
+                                                nminorkupper,
+                                                idx_h2o, idx_tropo,
+                                                gpoint_flavor_cpu,
+                                                kminor_upper_cpu,
+                                                minor_limits_gpt_upper_cpu,
+                                                minor_scales_with_density_upper_cpu,
+                                                scale_by_complement_upper_cpu,
+                                                idx_minor_upper_cpu,
+                                                idx_minor_scaling_upper_cpu,
+                                                kminor_start_upper_cpu,
+                                                play_cpu, tlay_cpu, col_gas_cpu,
+                                                fminor_cpu, jeta_cpu, jtemp_cpu,
+                                                tropo_cpu, tau_cpu, nullptr);
+                auto t1 = std::chrono::high_resolution_clock::now();
+                auto dt = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+                double milliseconds = static_cast<double>(dt)/1000;
+                std::cout << "Time elapsed: " << milliseconds << "ms" << std::endl;
+            } else {
+                std::cout << "Running parallel CPU code: upper call" << std::endl;
+                auto t0 = std::chrono::high_resolution_clock::now();
+                gas_optical_depths_minor_cpu_parallel(
+                                                ncol, nlay,
+                                                ntemp, neta,
+                                                nminorupper,
+                                                idx_h2o, idx_tropo,
+                                                gpoint_flavor_cpu,
+                                                kminor_upper_cpu,
+                                                minor_limits_gpt_upper_cpu,
+                                                minor_scales_with_density_upper_cpu,
+                                                scale_by_complement_upper_cpu,
+                                                idx_minor_upper_cpu,
+                                                idx_minor_scaling_upper_cpu,
+                                                kminor_start_upper_cpu,
+                                                play_cpu, tlay_cpu, col_gas_cpu,
+                                                fminor_cpu, jeta_cpu, jtemp_cpu,
+                                                tropo_cpu, tau_cpu);
+                auto t1 = std::chrono::high_resolution_clock::now();
+                auto dt = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+                double milliseconds = static_cast<double>(dt)/1000;
+                std::cout << "Time elapsed: " << milliseconds << "ms" << std::endl;
+            }
+
+            //transfer data from CPU to GPU
+            auto t0 = std::chrono::high_resolution_clock::now();
+            Array_gpu<Float,3> tau_gpu(tau_cpu_array);
+            tau_array.copy_from_other_array(tau_gpu);
+            auto t1 = std::chrono::high_resolution_clock::now();
+            auto dt = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+            double milliseconds = static_cast<double>(dt)/1000;
+            std::cout << "tau transfer time: " << milliseconds << "ms" << std::endl;
+        }
     }
 
 

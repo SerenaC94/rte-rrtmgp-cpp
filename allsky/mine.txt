@@ -1,0 +1,41 @@
+###### Starting RTE+RRTMGP solver ######
+Solver settings:
+cloud-optics         = true
+fluxes               = true
+longwave             = true
+output-bnd-fluxes    = false
+output-optical       = false
+shortwave            = true
+timings              = false
+Reading atmospheric input data from NetCDF.
+WARNING: Gas "ccl4" not available in input file.
+WARNING: Gas "cfc11" not available in input file.
+WARNING: Gas "cfc12" not available in input file.
+WARNING: Gas "cfc22" not available in input file.
+WARNING: Gas "hfc143a" not available in input file.
+WARNING: Gas "hfc125" not available in input file.
+WARNING: Gas "hfc23" not available in input file.
+WARNING: Gas "hfc32" not available in input file.
+WARNING: Gas "hfc134a" not available in input file.
+WARNING: Gas "cf4" not available in input file.
+WARNING: Gas "no2" not available in input file.
+Preparing NetCDF output file.
+Initializing the longwave solver.
+Solving the longwave radiation.
+Elapsed time for sequential kernel: 32 [ms]
+Elapsed time for sequential kernel: 9 [ms]
+Duration longwave solver: 68.312447 (ms)
+Elapsed time for sequential kernel: 32 [ms]
+Elapsed time for sequential kernel: 9 [ms]
+Duration longwave solver: 65.849922 (ms)
+Storing the longwave output.
+Initializing the shortwave solver.
+Solving the shortwave radiation.
+Elapsed time for sequential kernel: 22 [ms]
+Elapsed time for sequential kernel: 11 [ms]
+Duration shortwave solver: 62.656544 (ms)
+Elapsed time for sequential kernel: 23 [ms]
+Elapsed time for sequential kernel: 10 [ms]
+Duration shortwave solver: 62.578850 (ms)
+Storing the shortwave output.
+###### Finished RTE+RRTMGP solver ######

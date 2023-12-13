@@ -71,12 +71,14 @@ namespace Tools_gpu
         T* data_ptr = nullptr;
 
         #if defined(RTE_RRTMGP_GPU_MEMPOOL_CUDA)
-        cuda_safe_call(cudaMallocAsync((void **) &data_ptr, length*sizeof(T), 0));
+				cuda_safe_call(cudaMallocManaged((void **) &data_ptr, length*sizeof(T), 0));
         #elif defined(RTE_RRTMGP_GPU_MEMPOOL_OWN)
         data_ptr = (T*)(Memory_pool_gpu::get_instance().acquire(length*sizeof(T)));
         #else
-        cuda_safe_call(cudaMalloc((void **) &data_ptr, length*sizeof(T)));
-        #endif
+				//TODO modify this
+        cuda_safe_call(cudaMallocManaged((void **) &data_ptr, length*sizeof(T)));
+				#endif
+        cudaDeviceSynchronize();
         return data_ptr;
     }
 

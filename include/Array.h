@@ -595,7 +595,8 @@ class Array_gpu
             dim3 grid_gpu(grid_ncells);
 
             subset_kernel<<<grid_gpu, block_gpu>>>(a_sub.data_ptr, data_ptr, subset_data, a_sub.ncells);
-
+						//TODO
+						cudaDeviceSynchronize();
             return a_sub;
         }
         #endif

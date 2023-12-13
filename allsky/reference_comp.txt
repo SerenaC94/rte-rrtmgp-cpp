@@ -1,0 +1,5 @@
+Variable lw_flux_up differs (max abs difference: 1.976307e-07; max percent difference: 6.903159e-08%)
+Variable lw_flux_dn differs (max abs difference: 7.972043e-07; max percent difference: 3.313003e-07%)
+Variable sw_flux_up differs (max abs difference: 1.066427e-07; max percent difference: 1.110782e-07%)
+Variable sw_flux_dn differs (max abs difference: 1.419362e-07; max percent difference: 1.611829e-08%)
+Variable sw_flux_dir differs (max abs difference: 1.676657e-07; max percent difference: 2.027798e-08%)

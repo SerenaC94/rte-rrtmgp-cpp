@@ -1104,7 +1104,7 @@ void Gas_optics_rrtmgp_gpu::compute_gas_taus(
                 jeta.ptr(), jtemp.ptr(), jpress.ptr(),
                 tau.ptr());
 
-        rrtmgp_kernel_launcher_cuda::compute_tau_rayleigh(
+				rrtmgp_kernel_launcher_cuda::compute_tau_rayleigh(
                 ncol, nlay, nband, ngpt,
                 ngas, nflav, neta, npres, ntemp,
                 gpoint_flavor_gpu.ptr(),

@@ -45,6 +45,9 @@ endif()
 if(USECUDA)
   message(STATUS "CUDA: Enabled.")
   add_definitions("-DUSECUDA")
+	#TODO
+	#file(GLOB SPECIAL_SRC_FILES "src_kernels_cuda/*.cpp")
+	#set_source_files_properties(${SPECIAL_SRC_FILES} PROPERTY COMPILE_FLAGS -fopenmp)
 else()
   message(STATUS "CUDA: Disabled.")
 endif()
@@ -89,6 +92,13 @@ if(NOT HASCACHE)
   mark_as_advanced(HASCACHE)
   mark_as_advanced(CMAKE_INSTALL_PREFIX)
 endif()
+
+#TODO
+find_package(OpenMP)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -fopenmp")
 
 # Print the C++ and CUDA compiler flags to the screen.
 if(CMAKE_BUILD_TYPE STREQUAL "RELEASE")

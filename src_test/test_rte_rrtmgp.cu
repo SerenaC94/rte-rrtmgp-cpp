@@ -347,7 +347,8 @@ void solve_radiation(int argc, char** argv)
             lw_bnd_flux_dn .set_dims({n_col, n_lev, n_bnd_lw});
             lw_bnd_flux_net.set_dims({n_col, n_lev, n_bnd_lw});
         }
-
+				//TODO
+				cudaDeviceSynchronize();
 
         // Solve the radiation.
 
@@ -398,6 +399,9 @@ void solve_radiation(int argc, char** argv)
 
             cudaEventDestroy(start);
             cudaEventDestroy(stop);
+
+						//TODO
+						cudaDeviceSynchronize();
 
             Status::print_message("Duration longwave solver: " + std::to_string(duration) + " (ms)");
         };
